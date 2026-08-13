@@ -268,7 +268,19 @@ export function Dashboard() {
 
         {analysis && !loading && (
           <div className="space-y-14">
-            <SummaryCard summary={analysis.summary} confidence={analysis.confidence} />
+            <div>
+              <SummaryCard summary={analysis.summary} confidence={analysis.confidence} />
+              <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                {saveState === "saved"
+                  ? "Saved to your history"
+                  : saveState === "error"
+                    ? "Could not save to history"
+                    : user
+                      ? "Saving…"
+                      : "Sign in to save this analysis"}
+              </p>
+            </div>
+
 
             <section>
               <SectionHeading eyebrow="Step 02" title="Image analysis" icon={Scan} />
