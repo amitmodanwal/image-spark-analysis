@@ -88,12 +88,12 @@ export function EvidenceGraph({ analysis }: { analysis: Analysis }) {
   const { nodes, edges } = useMemo(() => buildGraph(analysis), [analysis]);
 
   return (
-    <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+    <section className="glass-panel rise-in rounded-3xl p-5 sm:p-6">
       <h2 className="flex items-center gap-2 text-lg font-semibold text-foreground">
         <Share2 className="size-5 text-primary" aria-hidden />
         Visual Relationship Graph
       </h2>
-      <div className="mt-4 h-[420px] w-full overflow-hidden rounded-xl border border-border bg-muted/30">
+      <div className="mt-4 h-[420px] w-full overflow-hidden rounded-2xl border border-border bg-background/40">
         {mounted && (
           <ReactFlow nodes={nodes} edges={edges} fitView proOptions={{ hideAttribution: true }}>
             <Background />

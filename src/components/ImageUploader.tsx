@@ -33,54 +33,58 @@ export function ImageUploader({ index, slot, onSelect, onRemove, disabled }: Ima
         setDragging(false);
         if (!disabled) handleFiles(e.dataTransfer.files);
       }}
-      className={`group relative flex flex-col overflow-hidden rounded-2xl border bg-card p-4 shadow-sm transition-all ${
-        dragging ? "border-primary ring-2 ring-ring/40" : "border-border hover:shadow-md"
+      className={`glass-panel group relative flex flex-col overflow-hidden rounded-3xl p-4 transition-all duration-500 ${
+        dragging ? "glow-ring border-primary/60" : "hover:border-primary/25"
       }`}
     >
       <div className="mb-3 flex items-center justify-between">
         <span className="inline-flex items-center gap-2 text-sm font-semibold text-foreground">
-          <span className="grid size-6 place-items-center rounded-md bg-secondary text-xs font-bold text-secondary-foreground">
+          <span className="grid size-6 place-items-center rounded-lg border border-border bg-background/50 font-mono text-[11px] font-bold text-primary">
             {index + 1}
           </span>
           Image {index + 1}
         </span>
         {slot.status === "uploaded" && (
-          <span className="inline-flex items-center gap-1 rounded-full bg-success/10 px-2 py-0.5 text-xs font-medium text-success">
+          <span className="inline-flex items-center gap-1 rounded-full border border-success/30 bg-success/10 px-2.5 py-0.5 text-xs font-medium text-success">
             <CheckCircle2 className="size-3.5" aria-hidden /> Uploaded
           </span>
         )}
         {slot.status === "error" && (
-          <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive">
+          <span className="inline-flex items-center gap-1 rounded-full border border-destructive/30 bg-destructive/10 px-2.5 py-0.5 text-xs font-medium text-destructive">
             <TriangleAlert className="size-3.5" aria-hidden /> Failed
           </span>
         )}
       </div>
 
-      <div className="relative flex min-h-44 flex-1 items-center justify-center rounded-xl border border-dashed border-border bg-muted/40">
+      <div className="relative flex min-h-44 flex-1 items-center justify-center overflow-hidden rounded-2xl border border-dashed border-border bg-background/30">
         {slot.previewUrl ? (
           <img
             src={slot.previewUrl}
             alt={`Evidence image ${index + 1} preview`}
-            className="h-44 w-full rounded-xl object-cover"
+            className="h-44 w-full rounded-2xl object-cover transition-transform duration-700 group-hover:scale-105"
           />
         ) : (
           <div className="px-4 py-8 text-center">
-            <ImageIcon className="mx-auto size-7 text-muted-foreground" aria-hidden />
-            <p className="mt-2 text-sm font-medium text-foreground">Drag &amp; drop an image</p>
-            <p className="mt-1 text-xs text-muted-foreground">JPG, PNG or WEBP · max 10 MB</p>
+            <span className="mx-auto grid size-11 place-items-center rounded-2xl border border-border bg-background/50 text-primary">
+              <ImageIcon className="size-5" aria-hidden />
+            </span>
+            <p className="mt-3 text-sm font-medium text-foreground">Drag &amp; drop an image</p>
+            <p className="mt-1 font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
+              JPG · PNG · WEBP · max 10 MB
+            </p>
           </div>
         )}
         {busy && (
-          <div className="absolute inset-0 grid place-items-center rounded-xl bg-card/75 backdrop-blur-sm">
+          <div className="absolute inset-0 grid place-items-center rounded-2xl bg-background/70 backdrop-blur-sm">
             <Loader2 className="size-6 animate-spin text-primary" aria-hidden />
           </div>
         )}
       </div>
 
       {busy && (
-        <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-secondary">
+        <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-background/60">
           <div
-            className="h-full rounded-full bg-primary transition-all"
+            className="bg-signal h-full rounded-full transition-all"
             style={{ width: `${slot.progress}%` }}
           />
         </div>
@@ -98,7 +102,7 @@ export function ImageUploader({ index, slot, onSelect, onRemove, disabled }: Ima
           type="button"
           variant="secondary"
           size="sm"
-          className="flex-1"
+          className="flex-1 rounded-xl"
           disabled={disabled || busy}
           onClick={() => inputRef.current?.click()}
         >
@@ -110,6 +114,7 @@ export function ImageUploader({ index, slot, onSelect, onRemove, disabled }: Ima
             type="button"
             variant="ghost"
             size="sm"
+            className="rounded-xl"
             disabled={disabled || busy}
             onClick={() => onRemove(index)}
             aria-label={`Remove image ${index + 1}`}
