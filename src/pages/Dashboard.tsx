@@ -1,5 +1,17 @@
 import { useState } from "react";
-import { AlertTriangle, Images, Scan, ShieldCheck, Sparkles, TriangleAlert, Zap } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import {
+  AlertTriangle,
+  History,
+  Images,
+  LogIn,
+  LogOut,
+  Scan,
+  ShieldCheck,
+  Sparkles,
+  TriangleAlert,
+  Zap,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ImageUploader } from "@/components/ImageUploader";
 import { ImageCard } from "@/components/ImageCard";
@@ -9,7 +21,10 @@ import { EvidenceGraph } from "@/components/EvidenceGraph";
 import { LoadingAnalysis } from "@/components/LoadingAnalysis";
 import { cloudinaryConfigured, uploadImage, validateImage } from "@/services/cloudinary";
 import { analyzeImages } from "@/services/api";
+import { supabase, supabaseConfigured } from "@/lib/supabase";
+import { useAuth } from "@/hooks/useAuth";
 import type { Analysis, ImageSlot } from "@/types/analysis";
+
 
 const EMPTY_SLOT: ImageSlot = { status: "empty", progress: 0 };
 
@@ -38,10 +53,13 @@ function SectionHeading({
 }
 
 export function Dashboard() {
+  const { user, signOut } = useAuth();
   const [slots, setSlots] = useState<ImageSlot[]>([EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT]);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [saveState, setSaveState] = useState<"idle" | "saved" | "error">("idle");
+
 
   const update = (index: number, patch: Partial<ImageSlot>) =>
     setSlots((prev) => prev.map((slot, i) => (i === index ? { ...slot, ...patch } : slot)));
@@ -89,16 +107,28 @@ export function Dashboard() {
     }
     setError(null);
     setAnalysis(null);
+    setSaveState("idle");
     setLoading(true);
     try {
       const result = await analyzeImages(uploadedUrls);
       setAnalysis(result.analysis);
+      if (supabaseConfigured && user) {
+        const { error: saveError } = await supabase.from("analyses").insert({
+          user_id: user.id,
+          title: `${uploadedUrls.length}-image analysis`,
+          image_urls: uploadedUrls,
+          analysis: result.analysis,
+          confidence: result.analysis.confidence ?? null,
+        });
+        setSaveState(saveError ? "error" : "saved");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Analysis failed. Please try again.");
     } finally {
       setLoading(false);
     }
   };
+
 
   const previewFor = (imageNumber: number) => {
     const uploadedSlots = slots.filter((s) => s.status === "uploaded");
@@ -120,10 +150,39 @@ export function Dashboard() {
               </p>
             </div>
           </div>
-          <span className="hidden items-center gap-1.5 rounded-full border border-border bg-card/60 px-3 py-1.5 text-xs font-medium text-muted-foreground sm:inline-flex">
-            <ShieldCheck className="size-3.5 text-success" aria-hidden />
-            Decision-support mode
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="hidden items-center gap-1.5 rounded-full border border-border bg-card/60 px-3 py-1.5 text-xs font-medium text-muted-foreground lg:inline-flex">
+              <ShieldCheck className="size-3.5 text-success" aria-hidden />
+              Decision-support mode
+            </span>
+            {user && (
+              <Button asChild variant="outline" size="sm" className="rounded-xl">
+                <Link to="/history">
+                  <History className="size-4" aria-hidden />
+                  <span className="hidden sm:inline">History</span>
+                </Link>
+              </Button>
+            )}
+            {user ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="rounded-xl"
+                onClick={() => void signOut()}
+              >
+                <LogOut className="size-4" aria-hidden />
+                <span className="hidden sm:inline">Sign out</span>
+              </Button>
+            ) : (
+              <Button asChild size="sm" className="bg-signal rounded-xl text-primary-foreground">
+                <Link to="/auth">
+                  <LogIn className="size-4" aria-hidden />
+                  Sign in
+                </Link>
+              </Button>
+            )}
+          </div>
+
         </div>
       </header>
 
@@ -209,7 +268,19 @@ export function Dashboard() {
 
         {analysis && !loading && (
           <div className="space-y-14">
-            <SummaryCard summary={analysis.summary} confidence={analysis.confidence} />
+            <div>
+              <SummaryCard summary={analysis.summary} confidence={analysis.confidence} />
+              <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                {saveState === "saved"
+                  ? "Saved to your history"
+                  : saveState === "error"
+                    ? "Could not save to history"
+                    : user
+                      ? "Saving…"
+                      : "Sign in to save this analysis"}
+              </p>
+            </div>
+
 
             <section>
               <SectionHeading eyebrow="Step 02" title="Image analysis" icon={Scan} />
