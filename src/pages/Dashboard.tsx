@@ -150,10 +150,39 @@ export function Dashboard() {
               </p>
             </div>
           </div>
-          <span className="hidden items-center gap-1.5 rounded-full border border-border bg-card/60 px-3 py-1.5 text-xs font-medium text-muted-foreground sm:inline-flex">
-            <ShieldCheck className="size-3.5 text-success" aria-hidden />
-            Decision-support mode
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="hidden items-center gap-1.5 rounded-full border border-border bg-card/60 px-3 py-1.5 text-xs font-medium text-muted-foreground lg:inline-flex">
+              <ShieldCheck className="size-3.5 text-success" aria-hidden />
+              Decision-support mode
+            </span>
+            {user && (
+              <Button asChild variant="outline" size="sm" className="rounded-xl">
+                <Link to="/history">
+                  <History className="size-4" aria-hidden />
+                  <span className="hidden sm:inline">History</span>
+                </Link>
+              </Button>
+            )}
+            {user ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="rounded-xl"
+                onClick={() => void signOut()}
+              >
+                <LogOut className="size-4" aria-hidden />
+                <span className="hidden sm:inline">Sign out</span>
+              </Button>
+            ) : (
+              <Button asChild size="sm" className="bg-signal rounded-xl text-primary-foreground">
+                <Link to="/auth">
+                  <LogIn className="size-4" aria-hidden />
+                  Sign in
+                </Link>
+              </Button>
+            )}
+          </div>
+
         </div>
       </header>
 
