@@ -1,5 +1,17 @@
 import { useState } from "react";
-import { AlertTriangle, Images, Scan, ShieldCheck, Sparkles, TriangleAlert, Zap } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import {
+  AlertTriangle,
+  History,
+  Images,
+  LogIn,
+  LogOut,
+  Scan,
+  ShieldCheck,
+  Sparkles,
+  TriangleAlert,
+  Zap,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ImageUploader } from "@/components/ImageUploader";
 import { ImageCard } from "@/components/ImageCard";
@@ -9,7 +21,10 @@ import { EvidenceGraph } from "@/components/EvidenceGraph";
 import { LoadingAnalysis } from "@/components/LoadingAnalysis";
 import { cloudinaryConfigured, uploadImage, validateImage } from "@/services/cloudinary";
 import { analyzeImages } from "@/services/api";
+import { supabase, supabaseConfigured } from "@/lib/supabase";
+import { useAuth } from "@/hooks/useAuth";
 import type { Analysis, ImageSlot } from "@/types/analysis";
+
 
 const EMPTY_SLOT: ImageSlot = { status: "empty", progress: 0 };
 
