@@ -107,16 +107,28 @@ export function Dashboard() {
     }
     setError(null);
     setAnalysis(null);
+    setSaveState("idle");
     setLoading(true);
     try {
       const result = await analyzeImages(uploadedUrls);
       setAnalysis(result.analysis);
+      if (supabaseConfigured && user) {
+        const { error: saveError } = await supabase.from("analyses").insert({
+          user_id: user.id,
+          title: `${uploadedUrls.length}-image analysis`,
+          image_urls: uploadedUrls,
+          analysis: result.analysis,
+          confidence: result.analysis.confidence ?? null,
+        });
+        setSaveState(saveError ? "error" : "saved");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Analysis failed. Please try again.");
     } finally {
       setLoading(false);
     }
   };
+
 
   const previewFor = (imageNumber: number) => {
     const uploadedSlots = slots.filter((s) => s.status === "uploaded");
