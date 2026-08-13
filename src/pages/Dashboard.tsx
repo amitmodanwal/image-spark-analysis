@@ -53,10 +53,13 @@ function SectionHeading({
 }
 
 export function Dashboard() {
+  const { user, signOut } = useAuth();
   const [slots, setSlots] = useState<ImageSlot[]>([EMPTY_SLOT, EMPTY_SLOT, EMPTY_SLOT]);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [saveState, setSaveState] = useState<"idle" | "saved" | "error">("idle");
+
 
   const update = (index: number, patch: Partial<ImageSlot>) =>
     setSlots((prev) => prev.map((slot, i) => (i === index ? { ...slot, ...patch } : slot)));
