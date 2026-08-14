@@ -6,11 +6,14 @@ import { supabase, supabaseConfigured, type AnalysisRecord } from "@/lib/supabas
 import { useAuth } from "@/hooks/useAuth";
 import { SummaryCard } from "@/components/SummaryCard";
 import type { Analysis } from "@/types/analysis";
+import { AuthGate } from "@/components/AuthGate";
+
 
 const title = "Analysis history — EvidenceLens AI";
 const description = "Revisit your saved image relationship analyses and investigation summaries.";
 
 export const Route = createFileRoute("/history")({
+  ssr: false,
   head: () => ({
     meta: [
       { title },
@@ -21,8 +24,13 @@ export const Route = createFileRoute("/history")({
       { name: "twitter:card", content: "summary" },
     ],
   }),
-  component: HistoryPage,
+  component: () => (
+    <AuthGate>
+      <HistoryPage />
+    </AuthGate>
+  ),
 });
+
 
 function HistoryPage() {
   const { user, loading: authLoading } = useAuth();
