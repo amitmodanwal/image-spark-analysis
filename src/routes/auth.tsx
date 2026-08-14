@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { Scan, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase, supabaseConfigured } from "@/lib/supabase";
+import { useAuth } from "@/hooks/useAuth";
+
 
 const title = "Sign in — EvidenceLens AI";
 const description = "Sign in to save and revisit your image relationship analyses.";
@@ -25,12 +27,18 @@ export const Route = createFileRoute("/auth")({
 
 function AuthPage() {
   const navigate = useNavigate();
+  const { user, loading: authLoading } = useAuth();
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!authLoading && user) void navigate({ to: "/", replace: true });
+  }, [authLoading, user, navigate]);
+
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
