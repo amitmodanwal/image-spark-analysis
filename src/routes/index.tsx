@@ -1,11 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Dashboard } from "@/pages/Dashboard";
+import { AuthGate } from "@/components/AuthGate";
 
 const title = "EvidenceLens AI — Image Relationship Analysis";
 const description =
   "Upload 2–3 images and let AI detect visual entities, possible relationships and generate an investigation-style summary.";
 
 export const Route = createFileRoute("/")({
+  ssr: false,
   head: () => ({
     meta: [
       { title },
@@ -16,5 +18,10 @@ export const Route = createFileRoute("/")({
       { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
-  component: Dashboard,
+  component: () => (
+    <AuthGate>
+      <Dashboard />
+    </AuthGate>
+  ),
 });
+
