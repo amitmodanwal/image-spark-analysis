@@ -276,7 +276,7 @@ export function Dashboard() {
                 {saveState === "saved"
                   ? "Saved to your history"
                   : saveState === "error"
-                    ? "Could not save to history"
+                    ? `Could not save to history — ${saveError ?? "unknown error"}`
                     : user
                       ? "Saving…"
                       : "Sign in to save this analysis"}
