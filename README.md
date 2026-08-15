@@ -87,3 +87,58 @@ Response:
    findings and the relationship graph render.
 6. Error cases: upload a >10 MB file or a GIF (validation error), remove an image and try to
    analyze with only 1 (button disabled), disconnect the network mid-analysis (friendly error).
+
+## 10. Deploy to Vercel (production checklist)
+
+This is a TanStack Start app built with Nitro. To deploy on Vercel instead of the default Cloudflare preset, follow the checklist below.
+
+### 10.1 Push the project to GitHub
+
+1. In Lovable: **GitHub → Connect** and push the repository.
+2. In Vercel: **New Project → Import** the repository.
+3. Framework preset: **Other**. Build command: `npm run build`. Leave Output Directory empty — Nitro writes to `.vercel/output` automatically.
+
+### 10.2 Set required production environment variables
+
+In Vercel → Project → Settings → Environment Variables, add every variable from `.env` (do not commit the values):
+
+| Variable | Value | Source |
+|----------|-------|--------|
+| `NITRO_PRESET` | `vercel` | Required to target Vercel instead of Cloudflare. |
+| `VITE_CLOUDINARY_CLOUD_NAME` | Your Cloudinary cloud name | Cloudinary Dashboard → Product Environment. |
+| `VITE_CLOUDINARY_UPLOAD_PRESET` | Your unsigned preset name | Cloudinary Settings → Upload → Upload presets. |
+| `VITE_SUPABASE_URL` | `https://psewpfcfvqxnyfgmloig.supabase.co` | Supabase Dashboard → Project Settings → API. |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | Your Supabase `anon` / publishable key | Supabase Dashboard → Project Settings → API Keys. |
+| `OPENAI_API_KEY` | `sk-...` | https://platform.openai.com/api-keys (only needed if you are not using the Lovable AI gateway). |
+| `LOVABLE_API_KEY` | Your Lovable API key | Lovable project settings (server-side, used by `/api/analyze`). |
+
+> Mark all keys as **Production** environment variables. `OPENAI_API_KEY` can be omitted if the Lovable AI gateway handles the analysis, but `LOVABLE_API_KEY` must be present for the server route.
+
+### 10.3 Configure Supabase Auth redirect URLs
+
+After the first Vercel deploy, copy the production domain (e.g. `https://your-project.vercel.app`) and add it in Supabase:
+
+Supabase Dashboard → Authentication → URL Configuration:
+
+- **Site URL**: `https://your-project.vercel.app`
+- **Redirect URLs**: Add `https://your-project.vercel.app/**` and `https://your-project.vercel.app/auth`
+
+This ensures email sign-in links and OAuth callbacks return users to the deployed app instead of `localhost:8080`.
+
+### 10.4 Verify the database schema
+
+Confirm the `analyses` table exists in Supabase before users save history:
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" \
+  "https://psewpfcfvqxnyfgmloig.supabase.co/rest/v1/analyses?select=id&limit=1" \
+  -H "apikey: $VITE_SUPABASE_PUBLISHABLE_KEY"
+```
+
+`200` = ready. `404` = run the contents of `supabase-setup.sql` in Supabase → SQL Editor first.
+
+### 10.5 Deploy and smoke-test
+
+1. Click **Deploy** in Vercel.
+2. Open the deployed URL, create an account, upload 2–3 images, and run **Analyze Relationships**.
+3. Visit **History** and confirm the saved analysis appears. If saving fails, check the browser console and the Vercel function logs for the exact Supabase error.
