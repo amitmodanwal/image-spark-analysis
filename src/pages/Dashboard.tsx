@@ -59,6 +59,7 @@ export function Dashboard() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<"idle" | "saved" | "error">("idle");
+  const [saveError, setSaveError] = useState<string | null>(null);
 
 
   const update = (index: number, patch: Partial<ImageSlot>) =>
@@ -120,6 +121,7 @@ export function Dashboard() {
           analysis: result.analysis,
           confidence: result.analysis.confidence ?? null,
         });
+        setSaveError(saveError?.message ?? null);
         setSaveState(saveError ? "error" : "saved");
       }
     } catch (err) {
@@ -274,7 +276,7 @@ export function Dashboard() {
                 {saveState === "saved"
                   ? "Saved to your history"
                   : saveState === "error"
-                    ? "Could not save to history"
+                    ? `Could not save to history — ${saveError ?? "unknown error"}`
                     : user
                       ? "Saving…"
                       : "Sign in to save this analysis"}
