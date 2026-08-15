@@ -121,6 +121,7 @@ export function Dashboard() {
           analysis: result.analysis,
           confidence: result.analysis.confidence ?? null,
         });
+        setSaveError(saveError?.message ?? null);
         setSaveState(saveError ? "error" : "saved");
       }
     } catch (err) {
