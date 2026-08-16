@@ -107,7 +107,8 @@ export const Route = createFileRoute("/api/analyze")({
           return json({ success: false, error: "Images must be valid HTTPS image URLs." }, 400);
         }
 
-        const apiKey = process.env["LOVABLE_API_KEY"];
+        // Server-only secret. Never referenced in client code or .env files.
+        const apiKey = process.env["OPENAI_API_KEY"];
         if (!apiKey) {
           return json({ success: false, error: "AI service is not configured." }, 500);
         }
@@ -115,26 +116,24 @@ export const Route = createFileRoute("/api/analyze")({
         const content: Array<Record<string, unknown>> = [
           {
             type: "input_text",
-            text: `Analyze these ${images.length} images together and return the structured JSON analysis. Reference images as "Image 1", "Image 2"${images.length === 3 ? ', "Image 3"' : ""}.`,
+            text: `Analyze these ${images.length} images together and return the structured JSON analysis. Identify relationships, common evidence, differences and relevant connections between them. Reference images as "Image 1", "Image 2"${images.length === 3 ? ', "Image 3"' : ""}.`,
           },
           ...images.map((url) => ({ type: "input_image", image_url: url })),
         ];
 
         let res: Response;
         try {
-          res = await fetch("https://ai.gateway.lovable.dev/v1/responses", {
+          res = await fetch("https://api.openai.com/v1/responses", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              "Lovable-API-Key": apiKey,
-              "X-Lovable-AIG-SDK": "fetch",
+              Authorization: `Bearer ${apiKey}`,
             },
             body: JSON.stringify({
-              model: "openai/gpt-5.2",
+              model: "gpt-4o",
               stream: true,
               instructions: SYSTEM_INSTRUCTION,
               input: [{ role: "user", content }],
-              reasoning: { effort: "low", summary: "auto" },
               text: {
                 format: {
                   type: "json_schema",
@@ -148,6 +147,7 @@ export const Route = createFileRoute("/api/analyze")({
         } catch {
           return json({ success: false, error: "Could not reach the AI service." }, 502);
         }
+
 
         if (!res.ok || !res.body) {
           const status = res.status === 429 ? 429 : res.status === 402 ? 402 : 502;
