@@ -161,6 +161,7 @@ export const Route = createFileRoute("/api/analyze")({
         }
 
         let text = "";
+        let streamError: { code?: string; message?: string } | null = null;
         try {
           const reader = res.body.getReader();
           const decoder = new TextDecoder();
@@ -177,9 +178,12 @@ export const Route = createFileRoute("/api/analyze")({
               if (!payload || payload === "[DONE]") continue;
               try {
                 const event = JSON.parse(payload);
-                console.log("[analyze] event", event.type, JSON.stringify(event).slice(0, 300));
                 if (event.type === "response.output_text.delta" && typeof event.delta === "string") {
                   text += event.delta;
+                } else if (event.type === "error") {
+                  streamError = event.error ?? null;
+                } else if (event.type === "response.failed") {
+                  streamError = event.response?.error ?? streamError;
                 } else if (event.type === "response.completed" && !text) {
                   const out = event.response?.output ?? [];
                   text =
@@ -192,16 +196,31 @@ export const Route = createFileRoute("/api/analyze")({
               } catch {
                 /* ignore malformed chunk */
               }
-
             }
           }
         } catch {
           return json({ success: false, error: "The analysis stream was interrupted." }, 502);
         }
 
+        if (streamError) {
+          const quota =
+            streamError.code === "credit_balance_exhausted" ||
+            streamError.code === "insufficient_quota";
+          return json(
+            {
+              success: false,
+              error: quota
+                ? "OpenAI credits are exhausted. Add credits to your OpenAI account to continue."
+                : (streamError.message ?? "The AI service could not complete this analysis."),
+            },
+            quota ? 402 : 502,
+          );
+        }
+
         if (!text.trim()) {
           return json({ success: false, error: "The AI returned an empty analysis." }, 502);
         }
+
 
         try {
           const analysis = JSON.parse(text);
