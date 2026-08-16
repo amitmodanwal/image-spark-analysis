@@ -177,14 +177,22 @@ export const Route = createFileRoute("/api/analyze")({
               if (!payload || payload === "[DONE]") continue;
               try {
                 const event = JSON.parse(payload);
+                console.log("[analyze] event", event.type, JSON.stringify(event).slice(0, 300));
                 if (event.type === "response.output_text.delta" && typeof event.delta === "string") {
                   text += event.delta;
                 } else if (event.type === "response.completed" && !text) {
-                  text = event.response?.output_text ?? "";
+                  const out = event.response?.output ?? [];
+                  text =
+                    event.response?.output_text ??
+                    out
+                      .flatMap((item: { content?: Array<{ text?: string }> }) => item.content ?? [])
+                      .map((c: { text?: string }) => c.text ?? "")
+                      .join("");
                 }
               } catch {
                 /* ignore malformed chunk */
               }
+
             }
           }
         } catch {
