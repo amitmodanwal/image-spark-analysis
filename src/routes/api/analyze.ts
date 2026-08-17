@@ -93,7 +93,7 @@ function toBase64(buffer: ArrayBuffer) {
 async function toInlinePart(ref: string) {
   if (ref.startsWith("data:image/")) {
     const [meta, data] = ref.split(",", 2);
-    const mimeType = meta.slice(5).split(";")[0] || "image/jpeg";
+    const mimeType = (meta ?? "").slice(5).split(";")[0] || "image/jpeg";
     return { inlineData: { mimeType, data: data ?? "" } };
   }
   const res = await fetch(ref);
