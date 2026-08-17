@@ -19,6 +19,7 @@ import { RelationshipCard } from "@/components/RelationshipCard";
 import { SummaryCard } from "@/components/SummaryCard";
 import { EvidenceGraph } from "@/components/EvidenceGraph";
 import { LoadingAnalysis } from "@/components/LoadingAnalysis";
+import { RegionalDataDemo } from "@/components/RegionalDataDemo";
 import { cloudinaryConfigured, uploadImage, validateImage } from "@/services/cloudinary";
 import { analyzeImages } from "@/services/api";
 import { supabase, supabaseConfigured } from "@/lib/supabase";
@@ -334,6 +335,8 @@ export function Dashboard() {
             <EvidenceGraph analysis={analysis} />
           </div>
         )}
+
+        <RegionalDataDemo />
       </main>
 
       <footer className="border-t border-border py-8 text-center">
