@@ -19,16 +19,15 @@ Every relationship must include supporting evidence and a confidence score betwe
 Use cautious wording such as "possible", "visual similarity detected", "appears consistent with".
 The final response must be valid JSON.`;
 
+// Gemini responseSchema uses the OpenAPI subset (no additionalProperties).
 const JSON_SCHEMA = {
   type: "object",
-  additionalProperties: false,
   required: ["images", "relationships", "importantFindings", "summary", "confidence"],
   properties: {
     images: {
       type: "array",
       items: {
         type: "object",
-        additionalProperties: false,
         required: ["imageNumber", "description", "entities"],
         properties: {
           imageNumber: { type: "integer" },
@@ -37,7 +36,6 @@ const JSON_SCHEMA = {
             type: "array",
             items: {
               type: "object",
-              additionalProperties: false,
               required: ["type", "description"],
               properties: {
                 type: {
@@ -55,7 +53,6 @@ const JSON_SCHEMA = {
       type: "array",
       items: {
         type: "object",
-        additionalProperties: false,
         required: ["from", "to", "type", "description", "evidence", "confidence"],
         properties: {
           from: { type: "string" },
@@ -84,6 +81,27 @@ function isValidImageRef(value: string) {
   return value.startsWith("https://") || value.startsWith("data:image/");
 }
 
+function toBase64(buffer: ArrayBuffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(binary);
+}
+
+async function toInlinePart(ref: string) {
+  if (ref.startsWith("data:image/")) {
+    const [meta, data] = ref.split(",", 2);
+    const mimeType = (meta ?? "").slice(5).split(";")[0] || "image/jpeg";
+    return { inlineData: { mimeType, data: data ?? "" } };
+  }
+  const res = await fetch(ref);
+  if (!res.ok) throw new Error("image_fetch_failed");
+  const mimeType = res.headers.get("content-type")?.split(";")[0] || "image/jpeg";
+  return { inlineData: { mimeType, data: toBase64(await res.arrayBuffer()) } };
+}
+
 export const Route = createFileRoute("/api/analyze")({
   server: {
     handlers: {
@@ -108,48 +126,52 @@ export const Route = createFileRoute("/api/analyze")({
         }
 
         // Server-only secret. Never referenced in client code or .env files.
-        const apiKey = process.env["OPENAI_API_KEY"];
+        const apiKey = process.env["GEMINI_API_KEY"];
         if (!apiKey) {
           return json({ success: false, error: "AI service is not configured." }, 500);
         }
 
-        const content: Array<Record<string, unknown>> = [
+        let imageParts: Array<{ inlineData: { mimeType: string; data: string } }>;
+        try {
+          imageParts = await Promise.all(images.map(toInlinePart));
+        } catch {
+          return json({ success: false, error: "Could not read one of the uploaded images." }, 502);
+        }
+
+        const parts: Array<Record<string, unknown>> = [
           {
-            type: "input_text",
             text: `Analyze these ${images.length} images together and return the structured JSON analysis. Identify relationships, common evidence, differences and relevant connections between them. Reference images as "Image 1", "Image 2"${images.length === 3 ? ', "Image 3"' : ""}.`,
           },
-          ...images.map((url) => ({ type: "input_image", image_url: url })),
+          ...imageParts,
         ];
 
         let res: Response;
         try {
-          res = await fetch("https://api.openai.com/v1/responses", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${apiKey}`,
-            },
-            body: JSON.stringify({
-              model: "gpt-4o",
-              stream: true,
-              instructions: SYSTEM_INSTRUCTION,
-              input: [{ role: "user", content }],
-              text: {
-                format: {
-                  type: "json_schema",
-                  name: "evidence_analysis",
-                  strict: true,
-                  schema: JSON_SCHEMA,
-                },
+          res = await fetch(
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "x-goog-api-key": apiKey,
               },
-            }),
-          });
+              body: JSON.stringify({
+                systemInstruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
+                contents: [{ role: "user", parts }],
+                generationConfig: {
+                  responseMimeType: "application/json",
+                  responseSchema: JSON_SCHEMA,
+                },
+              }),
+            },
+          );
         } catch {
           return json({ success: false, error: "Could not reach the AI service." }, 502);
         }
 
-
-        if (!res.ok || !res.body) {
+        if (!res.ok) {
+          const detail = await res.text().catch(() => "");
+          console.error(`Gemini request failed [${res.status}]: ${detail}`);
           const status = res.status === 429 ? 429 : res.status === 402 ? 402 : 502;
           const message =
             status === 429
@@ -160,67 +182,30 @@ export const Route = createFileRoute("/api/analyze")({
           return json({ success: false, error: message }, status);
         }
 
-        let text = "";
-        let streamError: { code?: string; message?: string } | null = null;
+        let payload: {
+          candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+          promptFeedback?: { blockReason?: string };
+        };
         try {
-          const reader = res.body.getReader();
-          const decoder = new TextDecoder();
-          let buffer = "";
-          for (;;) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split("\n");
-            buffer = lines.pop() ?? "";
-            for (const line of lines) {
-              if (!line.startsWith("data:")) continue;
-              const payload = line.slice(5).trim();
-              if (!payload || payload === "[DONE]") continue;
-              try {
-                const event = JSON.parse(payload);
-                if (event.type === "response.output_text.delta" && typeof event.delta === "string") {
-                  text += event.delta;
-                } else if (event.type === "error") {
-                  streamError = event.error ?? null;
-                } else if (event.type === "response.failed") {
-                  streamError = event.response?.error ?? streamError;
-                } else if (event.type === "response.completed" && !text) {
-                  const out = event.response?.output ?? [];
-                  text =
-                    event.response?.output_text ??
-                    out
-                      .flatMap((item: { content?: Array<{ text?: string }> }) => item.content ?? [])
-                      .map((c: { text?: string }) => c.text ?? "")
-                      .join("");
-                }
-              } catch {
-                /* ignore malformed chunk */
-              }
-            }
-          }
+          payload = await res.json();
         } catch {
-          return json({ success: false, error: "The analysis stream was interrupted." }, 502);
+          return json({ success: false, error: "The AI returned an unreadable analysis." }, 502);
         }
 
-        if (streamError) {
-          const quota =
-            streamError.code === "credit_balance_exhausted" ||
-            streamError.code === "insufficient_quota";
+        if (payload.promptFeedback?.blockReason) {
           return json(
-            {
-              success: false,
-              error: quota
-                ? "OpenAI credits are exhausted. Add credits to your OpenAI account to continue."
-                : (streamError.message ?? "The AI service could not complete this analysis."),
-            },
-            quota ? 402 : 502,
+            { success: false, error: "The AI declined to analyze these images." },
+            502,
           );
         }
+
+        const text = (payload.candidates?.[0]?.content?.parts ?? [])
+          .map((p) => p.text ?? "")
+          .join("");
 
         if (!text.trim()) {
           return json({ success: false, error: "The AI returned an empty analysis." }, 502);
         }
-
 
         try {
           const analysis = JSON.parse(text);
