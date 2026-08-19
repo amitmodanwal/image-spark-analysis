@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import {
   AlertTriangle,
+  Briefcase,
   History,
   Images,
   LogIn,
@@ -158,6 +159,14 @@ export function Dashboard() {
               <ShieldCheck className="size-3.5 text-success" aria-hidden />
               Decision-support mode
             </span>
+            {user && (
+              <Button asChild variant="outline" size="sm" className="rounded-xl">
+                <Link to="/cases">
+                  <Briefcase className="size-4" aria-hidden />
+                  <span className="hidden sm:inline">Cases</span>
+                </Link>
+              </Button>
+            )}
             {user && (
               <Button asChild variant="outline" size="sm" className="rounded-xl">
                 <Link to="/history">
