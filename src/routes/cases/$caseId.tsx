@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { createFileRoute, Link, useParams } from "@tanstack/react-router";
-import { ArrowLeft, Briefcase, FileText, Users, Car, MapPin, Clock, ScrollText, Trash2, Pencil, Loader2 } from "lucide-react";
+import { ArrowLeft, Briefcase, FileText, Users, Car, MapPin, Clock, ScrollText, Trash2, Pencil, Loader2, CalendarDays, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -15,8 +15,8 @@ import { TimelineTab } from "@/components/case/TimelineTab";
 import { AuditTab } from "@/components/case/AuditTab";
 import { EvidenceUploadModal } from "@/components/EvidenceUploadModal";
 import { EvidenceDrawer } from "@/components/EvidenceDrawer";
-import { fetchCase, updateCase, deleteCase, fetchLocations, fetchSuspects, fetchVictims, fetchWitnesses, fetchCaseEvents, fetchAuditLogs } from "@/services/case-service";
-import type { CaseRecord, CaseStatus, EvidenceRecord, LocationRecord, CaseEventRecord, AuditLogRecord, SuspectRecord, VictimRecord, WitnessRecord } from "@/types/case";
+import { fetchCase, updateCase, deleteCase, fetchLocations, fetchSuspects, fetchVictims, fetchWitnesses, fetchCaseEvents, fetchAuditLogs, fetchEvidence, fetchVehicles } from "@/services/case-service";
+import type { CaseRecord, CaseStatus, EvidenceRecord, LocationRecord, CaseEventRecord, AuditLogRecord, SuspectRecord, VictimRecord, WitnessRecord, VehicleRecord } from "@/types/case";
 
 type TabId = "evidence" | "people" | "vehicles" | "locations" | "timeline" | "audit";
 
@@ -58,15 +58,18 @@ function CaseDetailPage() {
   const [suspects, setSuspects] = useState<SuspectRecord[]>([]);
   const [victims, setVictims] = useState<VictimRecord[]>([]);
   const [witnesses, setWitnesses] = useState<WitnessRecord[]>([]);
+  const [evidence, setEvidence] = useState<EvidenceRecord[]>([]);
+  const [vehicles, setVehicles] = useState<VehicleRecord[]>([]);
   const [showUpload, setShowUpload] = useState(false);
   const [openEvidence, setOpenEvidence] = useState<EvidenceRecord | null>(null);
 
   const loadShared = useCallback(async () => {
-    const [locs, evs, logs, sus, vic, wit] = await Promise.all([
+    const [locs, evs, logs, sus, vic, wit, evi, veh] = await Promise.all([
       fetchLocations(caseId), fetchCaseEvents(caseId), fetchAuditLogs(caseId),
       fetchSuspects(caseId), fetchVictims(caseId), fetchWitnesses(caseId),
+      fetchEvidence(caseId), fetchVehicles(caseId),
     ]);
-    setLocations(locs); setEvents(evs); setAuditLogs(logs); setSuspects(sus); setVictims(vic); setWitnesses(wit);
+    setLocations(locs); setEvents(evs); setAuditLogs(logs); setSuspects(sus); setVictims(vic); setWitnesses(wit); setEvidence(evi); setVehicles(veh);
   }, [caseId]);
 
   const loadCase = useCallback(async () => {
@@ -148,6 +151,40 @@ function CaseDetailPage() {
         )}
       </div>
 
+      {/* Case Summary */}
+      <div className="glass-panel mt-4 rounded-3xl p-6">
+        <div className="flex items-center gap-3">
+          <span className="grid size-10 shrink-0 place-items-center rounded-2xl border border-border bg-card/60 text-primary">
+            <ShieldCheck className="size-5" aria-hidden />
+          </span>
+          <div>
+            <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-muted-foreground">Case overview</p>
+            <h2 className="text-lg font-semibold text-foreground">Summary</h2>
+          </div>
+        </div>
+
+        <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          <SummaryStat icon={FileText} label="Evidence" value={evidence.length} />
+          <SummaryStat icon={Users} label="People" value={suspects.length + victims.length + witnesses.length} />
+          <SummaryStat icon={Car} label="Vehicles" value={vehicles.length} />
+          <SummaryStat icon={MapPin} label="Locations" value={locations.length} />
+          <SummaryStat icon={Clock} label="Events" value={events.length} />
+          <SummaryStat icon={ScrollText} label="Audit logs" value={auditLogs.length} />
+        </div>
+
+        <div className="mt-5 flex flex-wrap gap-x-6 gap-y-2 font-mono text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+          <span className="inline-flex items-center gap-1.5"><CalendarDays className="size-3.5" aria-hidden /> Created {new Date(caseRecord.created_at).toLocaleDateString()}</span>
+          <span className="inline-flex items-center gap-1.5"><ShieldCheck className="size-3.5 text-success" aria-hidden /> Status: {caseRecord.status}</span>
+        </div>
+
+        {caseRecord.description && (
+          <p className="mt-4 text-sm leading-relaxed text-foreground/90">{caseRecord.description}</p>
+        )}
+        {!caseRecord.description && (
+          <p className="mt-4 text-sm italic text-muted-foreground">No description added yet. Click "Edit" to add case details.</p>
+        )}
+      </div>
+
       <div className="mt-6 flex flex-wrap gap-2">
         {TABS.map((tab) => {
           const Icon = tab.icon;
@@ -176,6 +213,16 @@ function CaseDetailPage() {
       {openEvidence && (
         <EvidenceDrawer evidence={openEvidence} caseId={caseId} events={events} auditLogs={auditLogs} onClose={() => setOpenEvidence(null)} onUpdated={() => { void loadCase(); }} onDeleted={() => { void loadCase(); }} />
       )}
+    </div>
+  );
+}
+
+function SummaryStat({ icon: Icon, label, value }: { icon: typeof FileText; label: string; value: number }) {
+  return (
+    <div className="rounded-xl border border-border bg-background/40 px-3 py-3 text-center">
+      <Icon className="mx-auto size-4 text-primary" aria-hidden />
+      <p className="mt-1.5 font-mono text-lg font-bold tabular-nums text-foreground">{value}</p>
+      <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</p>
     </div>
   );
 }
