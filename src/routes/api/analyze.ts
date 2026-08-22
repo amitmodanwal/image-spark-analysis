@@ -17,58 +17,14 @@ Do not invent facts. Do not identify a real person's identity from appearance.
 Clearly distinguish: 1. Directly observable evidence 2. Possible relationship 3. Uncertain inference.
 Every relationship must include supporting evidence and a confidence score between 0 and 1.
 Use cautious wording such as "possible", "visual similarity detected", "appears consistent with".
-The final response must be valid JSON.`;
-
-// Gemini responseSchema uses the OpenAPI subset (no additionalProperties).
-const JSON_SCHEMA = {
-  type: "object",
-  required: ["images", "relationships", "importantFindings", "summary", "confidence"],
-  properties: {
-    images: {
-      type: "array",
-      items: {
-        type: "object",
-        required: ["imageNumber", "description", "entities"],
-        properties: {
-          imageNumber: { type: "integer" },
-          description: { type: "string" },
-          entities: {
-            type: "array",
-            items: {
-              type: "object",
-              required: ["type", "description"],
-              properties: {
-                type: {
-                  type: "string",
-                  enum: ["person", "vehicle", "object", "location", "text", "feature", "environment"],
-                },
-                description: { type: "string" },
-              },
-            },
-          },
-        },
-      },
-    },
-    relationships: {
-      type: "array",
-      items: {
-        type: "object",
-        required: ["from", "to", "type", "description", "evidence", "confidence"],
-        properties: {
-          from: { type: "string" },
-          to: { type: "string" },
-          type: { type: "string" },
-          description: { type: "string" },
-          evidence: { type: "array", items: { type: "string" } },
-          confidence: { type: "number" },
-        },
-      },
-    },
-    importantFindings: { type: "array", items: { type: "string" } },
-    summary: { type: "string" },
-    confidence: { type: "number" },
-  },
-} as const;
+The final response must be valid JSON with this exact structure:
+{
+  "images": [{ "imageNumber": 1, "description": "...", "entities": [{ "type": "person|vehicle|object|location|text|feature|environment", "description": "..." }] }],
+  "relationships": [{ "from": "Image 1", "to": "Image 2", "type": "...", "description": "...", "evidence": ["..."], "confidence": 0.0-1.0 }],
+  "importantFindings": ["..."],
+  "summary": "...",
+  "confidence": 0.0-1.0
+}`;
 
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -90,16 +46,12 @@ function toBase64(buffer: ArrayBuffer) {
   return btoa(binary);
 }
 
-async function toInlinePart(ref: string) {
-  if (ref.startsWith("data:image/")) {
-    const [meta, data] = ref.split(",", 2);
-    const mimeType = (meta ?? "").slice(5).split(";")[0] || "image/jpeg";
-    return { inlineData: { mimeType, data: data ?? "" } };
-  }
+async function toImageUrl(ref: string): Promise<string> {
+  if (ref.startsWith("data:image/")) return ref;
   const res = await fetch(ref);
   if (!res.ok) throw new Error("image_fetch_failed");
   const mimeType = res.headers.get("content-type")?.split(";")[0] || "image/jpeg";
-  return { inlineData: { mimeType, data: toBase64(await res.arrayBuffer()) } };
+  return `data:${mimeType};base64,${toBase64(await res.arrayBuffer())}`;
 }
 
 export const Route = createFileRoute("/api/analyze")({
@@ -125,83 +77,69 @@ export const Route = createFileRoute("/api/analyze")({
           return json({ success: false, error: "Images must be valid HTTPS image URLs." }, 400);
         }
 
-        // Server-only secret. Never referenced in client code or .env files.
-        const apiKey = process.env["GEMINI_API_KEY"];
+        const apiKey = process.env["OPENAI_API_KEY"];
         if (!apiKey) {
-          return json({ success: false, error: "AI service is not configured." }, 500);
+          return json({ success: false, error: "AI service is not configured. Set OPENAI_API_KEY." }, 500);
         }
 
-        let imageParts: Array<{ inlineData: { mimeType: string; data: string } }>;
+        let imageUrls: string[];
         try {
-          imageParts = await Promise.all(images.map(toInlinePart));
+          imageUrls = await Promise.all(images.map(toImageUrl));
         } catch {
           return json({ success: false, error: "Could not read one of the uploaded images." }, 502);
         }
 
-        const parts: Array<Record<string, unknown>> = [
+        const userContent: Array<Record<string, unknown>> = [
           {
+            type: "text",
             text: `Analyze these ${images.length} images together and return the structured JSON analysis. Identify relationships, common evidence, differences and relevant connections between them. Reference images as "Image 1", "Image 2"${images.length === 3 ? ', "Image 3"' : ""}.`,
           },
-          ...imageParts,
+          ...imageUrls.map((url) => ({ type: "image_url", image_url: { url } })),
         ];
 
         let res: Response;
         try {
-          res = await fetch(
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent",
-            {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "x-goog-api-key": apiKey,
-              },
-              body: JSON.stringify({
-                systemInstruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
-                contents: [{ role: "user", parts }],
-                generationConfig: {
-                  responseMimeType: "application/json",
-                  responseSchema: JSON_SCHEMA,
-                },
-              }),
+          res = await fetch("https://api.openai.com/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${apiKey}`,
             },
-          );
+            body: JSON.stringify({
+              model: "gpt-4o",
+              messages: [
+                { role: "system", content: SYSTEM_INSTRUCTION },
+                { role: "user", content: userContent },
+              ],
+              response_format: { type: "json_object" },
+              max_tokens: 4096,
+            }),
+          });
         } catch {
           return json({ success: false, error: "Could not reach the AI service." }, 502);
         }
 
         if (!res.ok) {
           const detail = await res.text().catch(() => "");
-          console.error(`Gemini request failed [${res.status}]: ${detail}`);
-          const status = res.status === 429 ? 429 : res.status === 402 ? 402 : 502;
+          console.error(`OpenAI request failed [${res.status}]: ${detail}`);
+          const status = res.status === 429 ? 429 : res.status === 402 || res.status === 401 ? 402 : 502;
           const message =
             status === 429
               ? "Too many requests right now. Please retry in a moment."
               : status === 402
-                ? "AI credits are exhausted. Please add credits to continue."
+                ? "AI credits are exhausted or the API key is invalid. Please check your OpenAI API key."
                 : "The AI service could not complete this analysis.";
           return json({ success: false, error: message }, status);
         }
 
-        let payload: {
-          candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-          promptFeedback?: { blockReason?: string };
-        };
+        let payload: { choices?: Array<{ message?: { content?: string } }> };
         try {
           payload = await res.json();
         } catch {
           return json({ success: false, error: "The AI returned an unreadable analysis." }, 502);
         }
 
-        if (payload.promptFeedback?.blockReason) {
-          return json(
-            { success: false, error: "The AI declined to analyze these images." },
-            502,
-          );
-        }
-
-        const text = (payload.candidates?.[0]?.content?.parts ?? [])
-          .map((p) => p.text ?? "")
-          .join("");
+        const text = payload.choices?.[0]?.message?.content ?? "";
 
         if (!text.trim()) {
           return json({ success: false, error: "The AI returned an empty analysis." }, 502);
